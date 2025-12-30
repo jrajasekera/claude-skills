@@ -19,6 +19,7 @@ OUTPUT_FILE=""
 FORCE_TOOL=""
 OUTPUT_DIR="."
 QUIET=false
+TRAFILATURA_RUNNER=""
 
 # Colors (disabled if not a terminal)
 if [[ -t 1 ]]; then
@@ -122,6 +123,16 @@ detect_tool() {
     fi
 }
 
+set_trafilatura_runner() {
+    if command -v trafilatura &> /dev/null; then
+        TRAFILATURA_RUNNER="trafilatura"
+    elif python3 -c "import trafilatura" &> /dev/null; then
+        TRAFILATURA_RUNNER="python3 -m trafilatura"
+    else
+        TRAFILATURA_RUNNER=""
+    fi
+}
+
 # Sanitize title for filename
 sanitize_filename() {
     local title="$1"
@@ -211,7 +222,13 @@ extract_trafilatura() {
     
     log "Using trafilatura..."
     
-    if ! trafilatura --URL "$url" --output-format "markdown" --no-comments > "$output" 2>/dev/null; then
+    set_trafilatura_runner
+    if [[ -z "$TRAFILATURA_RUNNER" ]]; then
+        log_error "trafilatura is not available on PATH and the Python module is not installed."
+        return 1
+    fi
+    
+    if ! $TRAFILATURA_RUNNER --URL "$url" --output-format "markdown" --no-comments > "$output" 2>/dev/null; then
         return 1
     fi
     
@@ -344,6 +361,26 @@ main() {
     local tried_tools=()
     
     log "Extracting article from: $ARTICLE_URL"
+
+    if [[ -n "$FORCE_TOOL" ]]; then
+        case "$FORCE_TOOL" in
+            readability)
+                if ! command -v readable &> /dev/null; then
+                    log_error "Forced tool 'readability' is not available on PATH. Install readability-cli or remove --tool."
+                    rm -f "$temp_file"
+                    exit 1
+                fi
+                ;;
+            trafilatura)
+                set_trafilatura_runner
+                if [[ -z "$TRAFILATURA_RUNNER" ]]; then
+                    log_error "Forced tool 'trafilatura' is not available on PATH. Add it to PATH or install the Python module."
+                    rm -f "$temp_file"
+                    exit 1
+                fi
+                ;;
+        esac
+    fi
     
     # Try extraction with selected/detected tool
     case "$tool" in
