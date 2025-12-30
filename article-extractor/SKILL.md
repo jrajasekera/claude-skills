@@ -1,180 +1,99 @@
 ---
 name: article-extractor
-description: Extract clean article content from URLs and save as markdown. Triggers when user provides a webpage URL and wants to download it, extract content, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content.
+description: Extract clean article content from URLs and save as markdown. Triggers when user provides a webpage URL and wants to download it, extract content, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content. This skill handles the entire workflow - do NOT use web_fetch or other tools first, just call the extraction script directly with the URL.
 ---
 
 # Article Extractor
 
-Extract clean, readable content from web articles by removing navigation, ads, newsletter signups, and other clutter. The tool automatically tries multiple extraction methods to ensure success.
+Extract clean article content from URLs, automatically removing ads, navigation, and clutter. Multi-tool fallback ensures reliability.
 
-## Quick Usage
+## Workflow
+
+When user provides a URL to download/extract:
+1. Call the extraction script directly with the URL (do NOT fetch the URL first with web_fetch)
+2. Script handles fetching, extraction, and saving automatically
+3. Returns clean markdown file with frontmatter
+
+## Usage
 
 ```bash
-# Basic extraction (outputs markdown)
+# Basic extraction
 scripts/extract-article.sh "https://example.com/article"
 
-# Specify output file
+# Specify output file or directory
 scripts/extract-article.sh "https://example.com/article" --output my-article.md
-
-# Specify output directory
 scripts/extract-article.sh "https://example.com/article" --output-dir ~/Documents/articles
 ```
 
-## Script Location
+Make script executable if needed: `chmod +x scripts/extract-article.sh`
 
-The extraction script is located at:
-```
-scripts/extract-article.sh
-```
+## Options
 
-Run it directly or copy to a working directory first.
+- `--output <file>` / `-o`: Output filename (auto-generated from title if omitted)
+- `--output-dir <dir>` / `-d`: Output directory (default: current directory)
+- `--tool <tool>` / `-t`: Force specific tool: `jina`, `readability`, `trafilatura`, `fallback`
+- `--quiet` / `-q`: Suppress progress messages
 
-**Note:** If you get a "Permission denied" error, make the script executable:
-```bash
-chmod +x scripts/extract-article.sh
-```
+## Tool Selection & Fallback
 
-## Command Options
+Script tries tools in this order until one succeeds:
+1. **Jina Reader API** (default, always available)
+2. **trafilatura** (if installed - better for academic articles)
+3. **readability-cli** (if installed)
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--output <file>` | `-o` | Output filename (auto-generated from title if not specified) |
-| `--tool <tool>` | `-t` | Force specific tool: `jina`, `readability`, `trafilatura`, `fallback` |
-| `--output-dir <dir>` | `-d` | Output directory (default: current directory) |
-| `--quiet` | `-q` | Suppress progress messages |
-| `--help` | `-h` | Show help message |
-
-## Automatic Tool Selection & Fallback
-
-The script intelligently selects and falls back between extraction tools:
-
-**Primary tool priority:**
-1. **Jina Reader API** (always available) - No install needed, works via API, excellent quality
-2. **trafilatura** (if installed) - Python-based, great for blogs and news
-3. **readability-cli** (if installed) - Mozilla's Readability algorithm
-
-**Automatic fallback:** If the primary tool fails, the script automatically tries all other available tools until one succeeds. This ensures maximum reliability without manual intervention.
+Automatic fallback ensures reliability. Install local tools with `scripts/install-deps.sh` for offline usage.
 
 ## Output Format
 
-Extracted files include:
-- YAML frontmatter with source URL and extraction date
-- Article title as heading
-- Clean article body
-- Preserved section headings
+Files include YAML frontmatter with metadata and clean markdown content:
 
-Example output:
 ```markdown
 ---
-source: https://example.com/great-article
+source: https://example.com/article
 extracted: 2025-01-15T10:30:00-05:00
 ---
 
 # Article Title
 
-Article content here...
+Clean article content...
 ```
-
-## What Gets Removed
-
-- Navigation menus and headers
-- Ads and promotional content
-- Newsletter signup forms
-- Related articles sidebars
-- Comment sections
-- Social media buttons
-- Cookie notices
 
 ## Error Handling
 
-The script handles issues gracefully with automatic recovery:
+Script automatically handles common issues:
+- Tool not available → tries next tool in fallback chain
+- Extraction fails → tries all tools before reporting failure
+- File exists → auto-appends number (article-1.md, article-2.md)
+- No title found → generates timestamp-based filename
 
-| Issue | Behavior |
-|-------|----------|
-| Tool not installed | Automatically uses next available tool |
-| Extraction fails | Tries all available tools before giving up |
-| TLS/certificate errors | Detects and tries alternative tools |
-| Paywall/login required | Reports error after trying all tools |
-| Invalid URL | Validates format before attempting extraction |
-| File exists | Auto-appends number to filename (article-1.md, article-2.md) |
-| No title found | Generates timestamp-based filename |
-| Empty/short content | Detected as error, triggers fallback |
+Common failures (after all tools exhausted): paywall/login required, complex JavaScript rendering, site blocks automation.
 
-## Installing Dependencies (Optional)
+## Local Tools (Optional)
 
-For faster, offline extraction, install local tools:
+For offline extraction, install local tools: `scripts/install-deps.sh`
 
-```bash
-# Run the installer
-scripts/install-deps.sh
+Or manually: `pip install trafilatura` and `npm install -g readability-cli`
 
-# Or install manually:
-pip install trafilatura           # Recommended local extractor
-npm install -g readability-cli    # Optional local extractor
-```
+## Examples
 
-Without local tools, the script uses Jina's Reader API (default) which works but requires internet.
-
-## Example Workflows
-
-### Extract single article
+Extract to current directory:
 ```bash
 scripts/extract-article.sh "https://blog.example.com/post"
-# Creates: Post-Title.md in current directory
 ```
 
-### Extract to specific location
+Extract to specific location:
 ```bash
 scripts/extract-article.sh "https://news.example.com/story" -d ~/reading -o story.md
-# Creates: ~/reading/story.md
 ```
 
-### Batch extraction
+Batch extraction:
 ```bash
-urls=(
-    "https://example.com/article1"
-    "https://example.com/article2"
-    "https://example.com/article3"
-)
-
 for url in "${urls[@]}"; do
     scripts/extract-article.sh "$url" -d ~/articles -q
 done
 ```
 
-### Force specific tool
+Force specific tool:
 ```bash
-# Use Jina API even if local tools installed
-scripts/extract-article.sh "https://example.com/article" --tool jina
+scripts/extract-article.sh "https://example.com/article" --tool trafilatura
 ```
-
-## Tips
-
-- **Markdown output** preserves headings and formatting
-- **Jina API** is always available and is the default extractor
-- **trafilatura** is better for academic articles and non-English content
-- **readability-cli** is a useful local fallback; if `pandoc` is installed it is converted to markdown
-
-## Troubleshooting
-
-**"Failed to extract article" (after trying all tools)**
-- Site requires authentication/login
-- Content is behind a paywall
-- Site uses complex JavaScript rendering
-- Site actively blocks automated extraction
-- Try visiting the URL in a browser first to verify it's accessible
-
-**Garbled or incomplete output**
-- Some sites have unusual HTML structure
-- Try forcing a different tool: `--tool trafilatura` or `--tool readability`
-- Install local tools for better results: `scripts/install-deps.sh`
-
-**File saved but contains error message**
-- This was a bug in earlier versions - should not happen with current version
-- If you see this, the script's error detection needs improvement
-- Report the URL so error patterns can be added
-
-**Empty filename (file named just ".md")**
-- Article has no detectable title
-- Script will auto-generate a timestamp-based name
-- You can specify filename manually with `--output my-file.md`
