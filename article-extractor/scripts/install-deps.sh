@@ -7,8 +7,8 @@
 # but local tools are faster and work offline.
 #
 # Tools installed:
-#   - readability-cli: Mozilla's Readability algorithm (npm)
 #   - trafilatura: Python-based extraction (pip)
+#   - readability-cli: Mozilla's Readability algorithm (npm)
 #
 
 set -euo pipefail
@@ -130,7 +130,7 @@ echo "================================================"
 echo ""
 
 if [[ "$READABILITY_INSTALLED" == true ]]; then
-    log_success "readability-cli: installed (recommended)"
+    log_success "readability-cli: installed (optional)"
 else
     log_warn "readability-cli: not installed"
 fi
@@ -148,12 +148,12 @@ echo ""
 if [[ "$READABILITY_INSTALLED" == true || "$TRAFILATURA_INSTALLED" == true ]]; then
     log_success "Article extraction is ready to use!"
 else
-    log_warn "No local tools installed, but Jina API will be used as fallback"
+    log_warn "No local tools installed, but Jina API will be used as the primary extractor"
     log_info "This works but requires internet and may be slower"
 fi
 
 echo ""
 echo "Manual installation commands:"
-echo "  npm install -g readability-cli    # Mozilla Readability (recommended)"
-echo "  pip install trafilatura           # Python alternative"
+echo "  pip install trafilatura           # Python local extractor (recommended)"
+echo "  npm install -g readability-cli    # Mozilla Readability (optional)"
 echo ""

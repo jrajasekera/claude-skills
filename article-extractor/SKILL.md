@@ -49,9 +49,9 @@ chmod +x scripts/extract-article.sh
 The script intelligently selects and falls back between extraction tools:
 
 **Primary tool priority:**
-1. **readability-cli** (if installed) - Mozilla's Readability algorithm, excellent quality
+1. **Jina Reader API** (always available) - No install needed, works via API, excellent quality
 2. **trafilatura** (if installed) - Python-based, great for blogs and news
-3. **Jina Reader API** (always available) - No install needed, works via API
+3. **readability-cli** (if installed) - Mozilla's Readability algorithm
 
 **Automatic fallback:** If the primary tool fails, the script automatically tries all other available tools until one succeeds. This ensures maximum reliability without manual intervention.
 
@@ -109,11 +109,11 @@ For faster, offline extraction, install local tools:
 scripts/install-deps.sh
 
 # Or install manually:
-npm install -g readability-cli    # Recommended
-pip install trafilatura           # Alternative
+pip install trafilatura           # Recommended local extractor
+npm install -g readability-cli    # Optional local extractor
 ```
 
-Without local tools, the script uses Jina's Reader API which works but requires internet.
+Without local tools, the script uses Jina's Reader API (default) which works but requires internet.
 
 ## Example Workflows
 
@@ -151,9 +151,9 @@ scripts/extract-article.sh "https://example.com/article" --tool jina
 ## Tips
 
 - **Markdown output** preserves headings and formatting
-- **Jina API** is always available as fallback - no install needed
-- **readability-cli** gives best results for most sites
+- **Jina API** is always available and is the default extractor
 - **trafilatura** is better for academic articles and non-English content
+- **readability-cli** is a useful local fallback
 
 ## Troubleshooting
 
@@ -166,7 +166,7 @@ scripts/extract-article.sh "https://example.com/article" --tool jina
 
 **Garbled or incomplete output**
 - Some sites have unusual HTML structure
-- Try forcing a different tool: `--tool readability` or `--tool trafilatura`
+- Try forcing a different tool: `--tool trafilatura` or `--tool readability`
 - Install local tools for better results: `scripts/install-deps.sh`
 
 **File saved but contains error message**

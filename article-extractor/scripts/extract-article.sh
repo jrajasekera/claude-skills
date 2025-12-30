@@ -110,17 +110,8 @@ detect_tool() {
         return
     fi
     
-    # Priority: readability-cli (best quality) -> trafilatura (good for blogs) -> jina (always available)
-    # Local tools are preferred as they're faster and work offline
-    
-    if command -v readable &> /dev/null; then
-        echo "readability"
-    elif command -v trafilatura &> /dev/null; then
-        echo "trafilatura"
-    else
-        # Jina API - always available, no install needed
-        echo "jina"
-    fi
+    # Priority: Jina API (excellent quality, always available) -> trafilatura -> readability-cli
+    echo "jina"
 }
 
 set_trafilatura_runner() {
@@ -413,7 +404,7 @@ main() {
         log_warn "Primary tool '$tool' failed, trying alternatives..."
         
         # Try all available tools in priority order
-        for fallback_tool in readability trafilatura jina fallback; do
+        for fallback_tool in trafilatura readability fallback; do
             # Skip if already tried
             if [[ " ${tried_tools[@]} " =~ " ${fallback_tool} " ]]; then
                 continue
@@ -434,7 +425,8 @@ main() {
                     fi
                     ;;
                 trafilatura)
-                    if command -v trafilatura &> /dev/null && extract_trafilatura "$ARTICLE_URL" "$temp_file"; then
+                    set_trafilatura_runner
+                    if [[ -n "$TRAFILATURA_RUNNER" ]] && extract_trafilatura "$ARTICLE_URL" "$temp_file"; then
                         success=true
                         break
                     fi
