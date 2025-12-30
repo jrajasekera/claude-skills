@@ -1,6 +1,6 @@
 ---
 name: article-extractor
-description: Extract clean article content from URLs and save as markdown or text. Triggers when user provides an article/blog/news URL and wants to download it, extract content, save it as text, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content.
+description: Extract clean article content from URLs and save as markdown. Triggers when user provides an article/blog/news URL and wants to download it, extract content, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content.
 ---
 
 # Article Extractor
@@ -12,9 +12,6 @@ Extract clean, readable content from web articles by removing navigation, ads, n
 ```bash
 # Basic extraction (outputs markdown)
 scripts/extract-article.sh "https://example.com/article"
-
-# Output as plain text
-scripts/extract-article.sh "https://example.com/article" --format txt
 
 # Specify output file
 scripts/extract-article.sh "https://example.com/article" --output my-article.md
@@ -42,7 +39,6 @@ chmod +x scripts/extract-article.sh
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--output <file>` | `-o` | Output filename (auto-generated from title if not specified) |
-| `--format <fmt>` | `-f` | Output format: `txt` or `md` (default: md) |
 | `--tool <tool>` | `-t` | Force specific tool: `jina`, `readability`, `trafilatura`, `fallback` |
 | `--output-dir <dir>` | `-d` | Output directory (default: current directory) |
 | `--quiet` | `-q` | Suppress progress messages |
@@ -61,7 +57,7 @@ The script intelligently selects and falls back between extraction tools:
 
 ## Output Format
 
-Extracted files include:
+All outputs are markdown. Extracted files include:
 - YAML frontmatter with source URL and extraction date
 - Article title as heading
 - Clean article body
@@ -154,8 +150,7 @@ scripts/extract-article.sh "https://example.com/article" --tool jina
 
 ## Tips
 
-- **Markdown output** (default) preserves headings and formatting
-- **Plain text output** (`--format txt`) strips all formatting
+- **Markdown output** preserves headings and formatting
 - **Jina API** is always available as fallback - no install needed
 - **readability-cli** gives best results for most sites
 - **trafilatura** is better for academic articles and non-English content

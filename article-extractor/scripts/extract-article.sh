@@ -6,7 +6,6 @@
 #
 # Options:
 #   -o, --output <file>    Output filename (auto-generated from title if not specified)
-#   -f, --format <fmt>     Output format: txt or md (default: md)
 #   -t, --tool <tool>      Force specific tool: jina, readability, trafilatura, fallback
 #   -d, --output-dir <dir> Output directory (default: current directory)
 #   -q, --quiet            Suppress progress messages
@@ -17,7 +16,6 @@ set -euo pipefail
 
 # Defaults
 OUTPUT_FILE=""
-OUTPUT_FORMAT="md"
 FORCE_TOOL=""
 OUTPUT_DIR="."
 QUIET=false
@@ -56,10 +54,6 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -o|--output)
             OUTPUT_FILE="$2"
-            shift 2
-            ;;
-        -f|--format)
-            OUTPUT_FORMAT="$2"
             shift 2
             ;;
         -t|--tool)
@@ -217,12 +211,7 @@ extract_trafilatura() {
     
     log "Using trafilatura..."
     
-    local format_flag="txt"
-    if [[ "$OUTPUT_FORMAT" == "md" ]]; then
-        format_flag="markdown"
-    fi
-    
-    if ! trafilatura --URL "$url" --output-format "$format_flag" --no-comments > "$output" 2>/dev/null; then
+    if ! trafilatura --URL "$url" --output-format "markdown" --no-comments > "$output" 2>/dev/null; then
         return 1
     fi
     
@@ -434,7 +423,7 @@ main() {
     if [[ -z "$OUTPUT_FILE" ]]; then
         local title=$(get_title "$temp_file")
         local safe_name=$(sanitize_filename "$title")
-        OUTPUT_FILE="${OUTPUT_DIR}/${safe_name}.${OUTPUT_FORMAT}"
+        OUTPUT_FILE="${OUTPUT_DIR}/${safe_name}.md"
     else
         # Ensure output file is in output directory if not absolute path
         if [[ "$OUTPUT_FILE" != /* ]]; then
@@ -447,15 +436,6 @@ main() {
     
     # Add metadata header
     add_metadata "$temp_file" "$ARTICLE_URL"
-    
-    # Convert to txt if requested (strip markdown)
-    if [[ "$OUTPUT_FORMAT" == "txt" ]]; then
-        # Simple markdown to text conversion
-        sed -i 's/^#\+ //' "$temp_file"  # Remove heading markers
-        sed -i 's/\*\*\([^*]*\)\*\*/\1/g' "$temp_file"  # Remove bold
-        sed -i 's/\*\([^*]*\)\*/\1/g' "$temp_file"  # Remove italic
-        sed -i 's/`\([^`]*\)`/\1/g' "$temp_file"  # Remove inline code
-    fi
     
     # Move to final location
     mv "$temp_file" "$OUTPUT_FILE"

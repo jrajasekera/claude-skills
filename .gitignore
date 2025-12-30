@@ -17,6 +17,9 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# AI agents
+AGENTS.md
+
 # Editor directories and files
 .vscode/
 .idea/
