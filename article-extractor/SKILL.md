@@ -1,6 +1,6 @@
 ---
 name: article-extractor
-description: Extract clean article content from URLs and save as markdown. Triggers when user provides an article/blog/news URL and wants to download it, extract content, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content.
+description: Extract clean article content from URLs and save as markdown. Triggers when user provides a webpage URL and wants to download it, extract content, get a clean version without ads, or capture an article for offline reading. Handles blog posts, news articles, tutorials, documentation pages, and similar web content.
 ---
 
 # Article Extractor
@@ -57,7 +57,7 @@ The script intelligently selects and falls back between extraction tools:
 
 ## Output Format
 
-All outputs are markdown. Extracted files include:
+Extracted files include:
 - YAML frontmatter with source URL and extraction date
 - Article title as heading
 - Clean article body
