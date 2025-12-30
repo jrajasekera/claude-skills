@@ -21,6 +21,8 @@ Each skill is contained in its own folder with:
 
 Navigate to the individual skill folders to see specific usage instructions and documentation.
 
+Packaged skills are available in `packaged_skills/` and can be imported directly into Claude.
+
 ## Author
 
 Created by Jrajasekera
@@ -28,4 +30,3 @@ Created by Jrajasekera
 ---
 
 *Last updated: December 30, 2025*
-
