@@ -132,13 +132,15 @@ detect_tool() {
 sanitize_filename() {
     local title="$1"
     echo "$title" | \
+        tr '[:upper:]' '[:lower:]' | \
+        tr ' ' '-' | \
         tr '/' '-' | \
         tr ':' '-' | \
-        tr -d '?"'"'"'<>*' | \
-        tr '|\\' '-' | \
-        sed 's/  */ /g' | \
-        sed 's/^ *//' | \
-        sed 's/ *$//' | \
+        tr -d '?"'"'"'<>*|\\' | \
+        sed 's/\.\.*/\./g' | \
+        sed 's/--*/-/g' | \
+        sed 's/^-\+\|-\+$//g' | \
+        sed 's/^\.\+\|\.\+$//g' | \
         cut -c 1-80
 }
 
@@ -307,10 +309,10 @@ print(parser.get_content())
 get_title() {
     local file="$1"
     local title=""
-    
+
     # Try to get title from first markdown heading (skip frontmatter)
     title=$(grep -m1 '^# ' "$file" 2>/dev/null | sed 's/^# //' || true)
-    
+
     # If no title found, try first non-empty, non-metadata line
     if [[ -z "$title" ]]; then
         # Skip lines that are: empty, ---, metadata keys (word:), or very short
@@ -318,12 +320,12 @@ get_title() {
                 grep -m1 '.\{10,\}' | \
                 head -c 80 || true)
     fi
-    
+
     # Default if still empty
     if [[ -z "$title" ]]; then
         title="article-$(date +%Y%m%d-%H%M%S)"
     fi
-    
+
     echo "$title"
 }
 
