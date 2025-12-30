@@ -38,9 +38,16 @@ for manifest in "${skill_manifests[@]}"; do
     fi
 
     output="${PACKAGED_DIR}/${skill_name}.skill"
-    rm -f "$output"
+    temp_output="$(mktemp "${PACKAGED_DIR}/${skill_name}.skill.XXXXXX")"
 
-    (cd "$ROOT_DIR" && zipclean "$output" "$skill_name")
+    (cd "$ROOT_DIR" && zipclean "$temp_output" "$skill_name")
+
+    if [[ -f "$output" ]] && cmp -s "$temp_output" "$output"; then
+        rm -f "$temp_output"
+        continue
+    fi
+
+    mv "$temp_output" "$output"
     packaged_files+=("$output")
 done
 
