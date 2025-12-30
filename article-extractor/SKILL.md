@@ -153,7 +153,7 @@ scripts/extract-article.sh "https://example.com/article" --tool jina
 - **Markdown output** preserves headings and formatting
 - **Jina API** is always available and is the default extractor
 - **trafilatura** is better for academic articles and non-English content
-- **readability-cli** is a useful local fallback
+- **readability-cli** is a useful local fallback; if `pandoc` is installed it is converted to markdown
 
 ## Troubleshooting
 

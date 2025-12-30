@@ -52,7 +52,7 @@ else
     log_info "readability-cli not found"
 fi
 
-if command -v trafilatura &> /dev/null; then
+if command -v trafilatura &> /dev/null || python3 -c "import trafilatura" &> /dev/null; then
     log_success "trafilatura is already installed"
     TRAFILATURA_INSTALLED=true
 else

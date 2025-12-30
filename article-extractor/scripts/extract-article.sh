@@ -85,6 +85,18 @@ done
 
 set -- "${POSITIONAL_ARGS[@]}"
 
+# Validate forced tool value
+if [[ -n "$FORCE_TOOL" ]]; then
+    case "$FORCE_TOOL" in
+        jina|readability|trafilatura|fallback)
+            ;;
+        *)
+            log_error "Invalid tool '$FORCE_TOOL'. Use: jina, trafilatura, readability, or fallback."
+            exit 1
+            ;;
+    esac
+fi
+
 # Validate URL argument
 if [[ $# -lt 1 ]]; then
     log_error "Missing URL argument"
@@ -122,6 +134,22 @@ set_trafilatura_runner() {
     else
         TRAFILATURA_RUNNER=""
     fi
+}
+
+clean_readability_markdown() {
+    local file="$1"
+    local temp_file=$(mktemp)
+
+    sed -E \
+        -e 's/<div>//g' \
+        -e 's:</div>::g' \
+        -e 's/^::+.*$//g' \
+        -e 's/\[(.+)\]\{.+\}/\1/g' \
+        -e 's/^>(.+) --- (.+)$/\1\n>\n> <cite>\2<\/cite>/g' \
+        "$file" > "$temp_file"
+
+    cat -s "$temp_file" > "$file"
+    rm -f "$temp_file"
 }
 
 # Sanitize title for filename
@@ -196,11 +224,29 @@ extract_jina() {
 extract_readability() {
     local url="$1"
     local output="$2"
+    local temp_html=$(mktemp)
     
     log "Using readability-cli..."
     
-    if ! readable "$url" > "$output" 2>/dev/null; then
+    if ! readable "$url" > "$temp_html" 2>/dev/null; then
+        rm -f "$temp_html"
         return 1
+    fi
+
+    if command -v pandoc &> /dev/null; then
+        local temp_md=$(mktemp)
+        if pandoc -f html -t markdown "$temp_html" > "$temp_md" 2>/dev/null; then
+            clean_readability_markdown "$temp_md"
+            mv "$temp_md" "$output"
+        else
+            log_warn "pandoc failed to convert readability output; saving HTML as-is."
+            mv "$temp_html" "$output"
+            rm -f "$temp_md"
+            return 0
+        fi
+        rm -f "$temp_html"
+    else
+        mv "$temp_html" "$output"
     fi
     
     return 0
@@ -404,7 +450,7 @@ main() {
         log_warn "Primary tool '$tool' failed, trying alternatives..."
         
         # Try all available tools in priority order
-        for fallback_tool in trafilatura readability fallback; do
+        for fallback_tool in jina trafilatura readability fallback; do
             # Skip if already tried
             if [[ " ${tried_tools[@]} " =~ " ${fallback_tool} " ]]; then
                 continue
