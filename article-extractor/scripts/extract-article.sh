@@ -8,17 +8,35 @@
 #   -o, --output <file>    Output filename (auto-generated from title if not specified)
 #   -t, --tool <tool>      Force specific tool: jina, readability, trafilatura, fallback
 #   -d, --output-dir <dir> Output directory (default: current directory)
+#   -w, --wayback          Try Wayback Machine if original URL fails
 #   -q, --quiet            Suppress progress messages
 #   -h, --help             Show this help message
 #
+# Exit Codes:
+#   0 - Success
+#   1 - Invalid arguments or usage error
+#   2 - Network error (connection failed, timeout)
+#   3 - Access denied (paywall, login required, blocked)
+#   4 - No content extracted (empty or too short)
+#   5 - Tool not available (forced tool missing)
+#
 
 set -euo pipefail
+
+# Exit codes
+EXIT_SUCCESS=0
+EXIT_USAGE=1
+EXIT_NETWORK=2
+EXIT_ACCESS_DENIED=3
+EXIT_NO_CONTENT=4
+EXIT_TOOL_MISSING=5
 
 # Defaults
 OUTPUT_FILE=""
 FORCE_TOOL=""
 OUTPUT_DIR="."
 QUIET=false
+TRY_WAYBACK=false
 TRAFILATURA_RUNNER=""
 
 # Colors (disabled if not a terminal)
@@ -69,6 +87,10 @@ while [[ $# -gt 0 ]]; do
             QUIET=true
             shift
             ;;
+        -w|--wayback)
+            TRY_WAYBACK=true
+            shift
+            ;;
         -h|--help)
             show_help
             ;;
@@ -101,7 +123,7 @@ fi
 if [[ $# -lt 1 ]]; then
     log_error "Missing URL argument"
     echo "Usage: extract-article.sh <URL> [OPTIONS]"
-    exit 1
+    exit $EXIT_USAGE
 fi
 
 ARTICLE_URL="$1"
@@ -109,7 +131,7 @@ ARTICLE_URL="$1"
 # URL validation
 if [[ ! "$ARTICLE_URL" =~ ^https?:// ]]; then
     log_error "Invalid URL (must start with http:// or https://)"
-    exit 1
+    exit $EXIT_USAGE
 fi
 
 # Create output directory if needed
@@ -121,7 +143,7 @@ detect_tool() {
         echo "$FORCE_TOOL"
         return
     fi
-    
+
     # Priority: Jina API (excellent quality, always available) -> trafilatura -> readability-cli
     echo "jina"
 }
@@ -175,17 +197,17 @@ unique_filename() {
     local base=$(basename "$filepath")
     local name="${base%.*}"
     local ext="${base##*.}"
-    
+
     if [[ ! -f "$filepath" ]]; then
         echo "$filepath"
         return
     fi
-    
+
     local counter=1
     while [[ -f "${dir}/${name}-${counter}.${ext}" ]]; do
         ((counter++))
     done
-    
+
     echo "${dir}/${name}-${counter}.${ext}"
 }
 
@@ -193,30 +215,30 @@ unique_filename() {
 extract_jina() {
     local url="$1"
     local output="$2"
-    
+
     log "Using Jina Reader API..."
-    
+
     # Jina returns markdown by default
     if ! curl -sS "https://r.jina.ai/$url" > "$output" 2>/dev/null; then
         return 1
     fi
-    
+
     # Check if we got valid content (not an error message)
     if [[ ! -s "$output" ]]; then
         return 1
     fi
-    
+
     # Check for common error patterns (case-insensitive)
     if grep -qi "error\|failed\|denied\|upstream connect" "$output" 2>/dev/null; then
         return 1
     fi
-    
+
     # Check if content is suspiciously short (less than 100 chars suggests error)
     local content_size=$(wc -c < "$output" | tr -d ' ')
     if [[ "$content_size" -lt 100 ]]; then
         return 1
     fi
-    
+
     return 0
 }
 
@@ -225,9 +247,9 @@ extract_readability() {
     local url="$1"
     local output="$2"
     local temp_html=$(mktemp)
-    
+
     log "Using readability-cli..."
-    
+
     if ! readable "$url" > "$temp_html" 2>/dev/null; then
         rm -f "$temp_html"
         return 1
@@ -248,7 +270,7 @@ extract_readability() {
     else
         mv "$temp_html" "$output"
     fi
-    
+
     return 0
 }
 
@@ -256,19 +278,19 @@ extract_readability() {
 extract_trafilatura() {
     local url="$1"
     local output="$2"
-    
+
     log "Using trafilatura..."
-    
+
     set_trafilatura_runner
     if [[ -z "$TRAFILATURA_RUNNER" ]]; then
         log_error "trafilatura is not available on PATH and the Python module is not installed."
         return 1
     fi
-    
+
     if ! $TRAFILATURA_RUNNER --URL "$url" --output-format "markdown" --no-comments > "$output" 2>/dev/null; then
         return 1
     fi
-    
+
     return 0
 }
 
@@ -276,9 +298,9 @@ extract_trafilatura() {
 extract_fallback() {
     local url="$1"
     local output="$2"
-    
+
     log "Using fallback extraction..."
-    
+
     curl -sS "$url" | python3 -c "
 from html.parser import HTMLParser
 import sys
@@ -300,7 +322,7 @@ class ArticleExtractor(HTMLParser):
             self.in_skip = True
             self.depth = 1
             return
-            
+
         if tag == 'title' and not self.title:
             self.current_tag = 'title'
         elif tag in {'p', 'article', 'main', 'section'}:
@@ -340,12 +362,77 @@ print('# ' + parser.title)
 print()
 print(parser.get_content())
 " > "$output" 2>/dev/null
-    
+
     if [[ ! -s "$output" ]]; then
         return 1
     fi
-    
+
     return 0
+}
+
+# Get Wayback Machine URL for a given URL
+get_wayback_url() {
+    local url="$1"
+    local api_response
+
+    # Query Wayback Machine availability API
+    api_response=$(curl -sS "https://archive.org/wayback/available?url=$url" 2>/dev/null) || return 1
+
+    # Extract the archived URL using Python (more reliable than jq dependency)
+    local archived_url
+    archived_url=$(echo "$api_response" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    snapshot = data.get('archived_snapshots', {}).get('closest', {})
+    if snapshot.get('available'):
+        print(snapshot.get('url', ''))
+except:
+    pass
+" 2>/dev/null)
+
+    if [[ -n "$archived_url" ]]; then
+        echo "$archived_url"
+        return 0
+    fi
+
+    return 1
+}
+
+# Extract from Wayback Machine
+extract_wayback() {
+    local url="$1"
+    local output="$2"
+
+    log "Checking Wayback Machine for archived version..."
+
+    local wayback_url
+    if ! wayback_url=$(get_wayback_url "$url"); then
+        log_warn "No Wayback Machine snapshot found"
+        return 1
+    fi
+
+    log "Found archived version: $wayback_url"
+
+    # Try extraction tools on the wayback URL
+    if extract_jina "$wayback_url" "$output"; then
+        return 0
+    fi
+
+    set_trafilatura_runner
+    if [[ -n "$TRAFILATURA_RUNNER" ]] && extract_trafilatura "$wayback_url" "$output"; then
+        return 0
+    fi
+
+    if command -v readable &> /dev/null && extract_readability "$wayback_url" "$output"; then
+        return 0
+    fi
+
+    if extract_fallback "$wayback_url" "$output"; then
+        return 0
+    fi
+
+    return 1
 }
 
 # Get title from extracted content
@@ -377,7 +464,7 @@ add_metadata() {
     local file="$1"
     local url="$2"
     local temp_file=$(mktemp)
-    
+
     {
         echo "---"
         echo "source: $url"
@@ -386,7 +473,7 @@ add_metadata() {
         echo ""
         cat "$file"
     } > "$temp_file"
-    
+
     mv "$temp_file" "$file"
 }
 
@@ -396,7 +483,7 @@ main() {
     local temp_file=$(mktemp)
     local success=false
     local tried_tools=()
-    
+
     log "Extracting article from: $ARTICLE_URL"
 
     if [[ -n "$FORCE_TOOL" ]]; then
@@ -405,7 +492,7 @@ main() {
                 if ! command -v readable &> /dev/null; then
                     log_error "Forced tool 'readability' is not available on PATH. Install readability-cli or remove --tool."
                     rm -f "$temp_file"
-                    exit 1
+                    exit $EXIT_TOOL_MISSING
                 fi
                 ;;
             trafilatura)
@@ -413,12 +500,12 @@ main() {
                 if [[ -z "$TRAFILATURA_RUNNER" ]]; then
                     log_error "Forced tool 'trafilatura' is not available on PATH. Add it to PATH or install the Python module."
                     rm -f "$temp_file"
-                    exit 1
+                    exit $EXIT_TOOL_MISSING
                 fi
                 ;;
         esac
     fi
-    
+
     # Try extraction with selected/detected tool
     case "$tool" in
         jina)
@@ -442,20 +529,20 @@ main() {
             fi
             ;;
     esac
-    
+
     tried_tools+=("$tool")
-    
+
     # Automatic fallback: try other tools if primary failed
     if [[ "$success" == false ]]; then
         log_warn "Primary tool '$tool' failed, trying alternatives..."
-        
+
         # Try all available tools in priority order
         for fallback_tool in jina trafilatura readability fallback; do
             # Skip if already tried
             if [[ " ${tried_tools[@]} " =~ " ${fallback_tool} " ]]; then
                 continue
             fi
-            
+
             log "Trying $fallback_tool..."
             case "$fallback_tool" in
                 jina)
@@ -487,13 +574,40 @@ main() {
             tried_tools+=("$fallback_tool")
         done
     fi
-    
+
     if [[ "$success" == false ]]; then
-        log_error "Failed to extract article. The site may require authentication or use heavy JavaScript."
-        rm -f "$temp_file"
-        exit 1
+        # Try Wayback Machine if enabled
+        if [[ "$TRY_WAYBACK" == true ]]; then
+            log_warn "All extraction tools failed. Trying Wayback Machine..."
+            if extract_wayback "$ARTICLE_URL" "$temp_file"; then
+                success=true
+                log_success "Extracted from Wayback Machine archive"
+            fi
+        fi
     fi
-    
+
+    if [[ "$success" == false ]]; then
+        # Determine appropriate exit code based on failure symptoms
+        local exit_code=$EXIT_NO_CONTENT
+
+        # Check if it's likely an access issue
+        if curl -sS -o /dev/null -w "%{http_code}" "$ARTICLE_URL" 2>/dev/null | grep -qE "^(401|403|451)$"; then
+            exit_code=$EXIT_ACCESS_DENIED
+            log_error "Access denied. The site may require authentication or has blocked access."
+        elif ! curl -sS -o /dev/null "$ARTICLE_URL" 2>/dev/null; then
+            exit_code=$EXIT_NETWORK
+            log_error "Network error. Could not connect to the URL."
+        else
+            log_error "Failed to extract article content. The site may use heavy JavaScript rendering."
+            if [[ "$TRY_WAYBACK" == false ]]; then
+                log "Tip: Try --wayback flag to check for an archived version."
+            fi
+        fi
+
+        rm -f "$temp_file"
+        exit $exit_code
+    fi
+
     # Determine output filename
     if [[ -z "$OUTPUT_FILE" ]]; then
         local title=$(get_title "$temp_file")
@@ -505,16 +619,16 @@ main() {
             OUTPUT_FILE="${OUTPUT_DIR}/${OUTPUT_FILE}"
         fi
     fi
-    
+
     # Get unique filename if file exists
     OUTPUT_FILE=$(unique_filename "$OUTPUT_FILE")
-    
+
     # Add metadata header
     add_metadata "$temp_file" "$ARTICLE_URL"
-    
+
     # Move to final location
     mv "$temp_file" "$OUTPUT_FILE"
-    
+
     log_success "Extracted article"
     log_success "Saved to: $OUTPUT_FILE"
     log ""
@@ -522,7 +636,7 @@ main() {
     log "─────────────────────────────────────────"
     head -n 15 "$OUTPUT_FILE"
     log "─────────────────────────────────────────"
-    
+
     # Output file info
     local size=$(wc -c < "$OUTPUT_FILE" | tr -d ' ')
     local lines=$(wc -l < "$OUTPUT_FILE" | tr -d ' ')
