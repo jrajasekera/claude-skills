@@ -11,6 +11,9 @@ This repository contains custom Claude Skills that can be used to extend Claude'
 ### [article-extractor](./article-extractor/)
 Extract clean, readable content from web articles by removing navigation, ads, and other clutter. Supports multiple extraction methods and output formats.
 
+### [pandoc-converter](./pandoc-converter/)
+Convert documents between common formats using Pandoc for consistent output and easy automation.
+
 ## Structure
 
 Each skill is contained in its own folder with:
