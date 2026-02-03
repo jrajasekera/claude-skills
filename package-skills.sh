@@ -20,7 +20,7 @@ zipclean() {
     zip -r "$1" "${@:2}" -x "*.DS_Store" "__MACOSX/*"
 }
 
-skill_manifests=("$ROOT_DIR"/*/SKILL.md)
+skill_manifests=("$ROOT_DIR"/skills/*/SKILL.md)
 if [[ ${#skill_manifests[@]} -eq 0 ]]; then
     exit 0
 fi
@@ -41,7 +41,7 @@ for manifest in "${skill_manifests[@]}"; do
     temp_dir="$(mktemp -d)"
     temp_output="${temp_dir}/${skill_name}.skill"
 
-    (cd "$ROOT_DIR" && zipclean "$temp_output" "$skill_name")
+    (cd "$ROOT_DIR/skills" && zipclean "$temp_output" "$skill_name")
 
     if [[ -f "$output" ]] && cmp -s "$temp_output" "$output"; then
         rm -rf "$temp_dir"
