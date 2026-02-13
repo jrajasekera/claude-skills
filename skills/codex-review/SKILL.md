@@ -44,7 +44,16 @@ digraph trigger_decision {
 Run from the **project root directory**:
 
 ```bash
-timeout 600 codex exec -C /absolute/path/to/project/root \
+# Determine the timeout command (macOS doesn't have `timeout` by default)
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout 600"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout 600"
+else
+  TIMEOUT_CMD=""
+fi
+
+$TIMEOUT_CMD codex exec -C /absolute/path/to/project/root \
     --sandbox read-only \
     --full-auto \
     --skip-git-repo-check \
@@ -52,7 +61,7 @@ timeout 600 codex exec -C /absolute/path/to/project/root \
 ```
 
 **Parameters:**
-- `timeout 600`: Kill the process after 10 minutes to prevent indefinite hangs
+- `timeout`/`gtimeout` wrapper: Kill the process after 10 minutes to prevent indefinite hangs. Uses `timeout` on Linux, `gtimeout` on macOS (from `brew install coreutils`), or runs without a timeout if neither is available.
 - `-C`: Absolute path to project root
 - `--sandbox read-only`: Codex can read but not modify
 - `--full-auto`: No interactive prompts
@@ -156,7 +165,8 @@ Codex review failed after retry. How would you like to proceed?
 |---------|-----|
 | Running codex from wrong directory | Always use `-C /absolute/path/to/project/root` |
 | Running codex in background | Always run synchronously (no `&`). Background processes cause duplicate output later |
-| Codex hangs indefinitely | The `timeout 600` wrapper kills it after 10 minutes |
+| Codex hangs indefinitely | The `timeout`/`gtimeout` wrapper kills it after 10 minutes |
+| `timeout` not found (exit code 127) on macOS | Use `gtimeout` from `brew install coreutils`, or omit timeout if neither is available |
 | Writing feedback to file | Capture stdout directly, don't create feedback files |
 | Asking after each round | Complete all requested rounds without prompting |
 | Addressing all feedback equally | Categorize: critical = auto-fix, minor = ask user |
