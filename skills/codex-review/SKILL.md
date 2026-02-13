@@ -44,7 +44,7 @@ digraph trigger_decision {
 Run from the **project root directory**:
 
 ```bash
-codex exec -C /absolute/path/to/project/root \
+timeout 600 codex exec -C /absolute/path/to/project/root \
     --sandbox read-only \
     --full-auto \
     --skip-git-repo-check \
@@ -52,6 +52,7 @@ codex exec -C /absolute/path/to/project/root \
 ```
 
 **Parameters:**
+- `timeout 600`: Kill the process after 10 minutes to prevent indefinite hangs
 - `-C`: Absolute path to project root
 - `--sandbox read-only`: Codex can read but not modify
 - `--full-auto`: No interactive prompts
@@ -59,6 +60,8 @@ codex exec -C /absolute/path/to/project/root \
 - `2>/dev/null`: Suppress stderr noise
 
 **Capture stdout directly** - do not write feedback to a file.
+
+**CRITICAL: Run in foreground only.** Do NOT run codex exec as a background process (no `&`, no `nohup`, no subshell backgrounding). Always run it synchronously so that the command fully completes and exits before you proceed. Running it in the background can cause the process to linger and produce confusing duplicate output later when it eventually exits.
 
 **Path handling:**
 - **Plan inside project:** Use relative path from project root (e.g., `docs/plan.md`)
@@ -89,17 +92,22 @@ After receiving Codex's feedback, categorize each item:
 | **Critical issues** | Address immediately without asking. These are bugs, security issues, logical flaws, missing error handling, or architectural problems that would cause failures. |
 | **Minor concerns** | Present to user and ask which to address. These are style suggestions, optional improvements, alternative approaches, or "nice to have" items. |
 
-**Format when presenting minor concerns:**
+**Presenting minor concerns:**
 
+Use the `ask_user_input` tool (multi_select) to let the user pick which minor concerns to address. Each option should be a short summary of the concern. This avoids requiring the user to type out responses manually.
+
+Example usage:
 ```
-Codex raised these additional concerns. Which should I address?
-
-1. [Concern summary] - [Brief context]
-2. [Concern summary] - [Brief context]
-3. [Concern summary] - [Brief context]
-
-Reply with numbers to address (e.g., "1, 3") or "none" to skip.
+ask_user_input with type="multi_select":
+  question: "Codex raised these additional concerns. Which should I address?"
+  options:
+    - "[Concern 1 summary]"
+    - "[Concern 2 summary]"
+    - "[Concern 3 summary]"
+    - "None of these"
 ```
+
+If there are more than 4 minor concerns, group related ones together or split across multiple questions (the tool supports up to 3 questions with up to 4 options each). If concerns don't fit in the tool's constraints, fall back to listing them in text and asking the user to reply.
 
 ## Review Rounds
 
@@ -147,6 +155,8 @@ Codex review failed after retry. How would you like to proceed?
 | Mistake | Fix |
 |---------|-----|
 | Running codex from wrong directory | Always use `-C /absolute/path/to/project/root` |
+| Running codex in background | Always run synchronously (no `&`). Background processes cause duplicate output later |
+| Codex hangs indefinitely | The `timeout 600` wrapper kills it after 10 minutes |
 | Writing feedback to file | Capture stdout directly, don't create feedback files |
 | Asking after each round | Complete all requested rounds without prompting |
 | Addressing all feedback equally | Categorize: critical = auto-fix, minor = ask user |
