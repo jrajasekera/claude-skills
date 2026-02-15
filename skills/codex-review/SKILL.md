@@ -43,17 +43,10 @@ digraph trigger_decision {
 
 Run from the **project root directory**:
 
-```bash
-# Determine the timeout command (macOS doesn't have `timeout` by default)
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout 600"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout 600"
-else
-  TIMEOUT_CMD=""
-fi
+**CRITICAL: This MUST be a single Bash tool invocation.** Shell state (variables) does not persist between Bash calls, so the timeout detection and codex exec must be in the same command.
 
-$TIMEOUT_CMD codex exec -C /absolute/path/to/project/root \
+```bash
+TIMEOUT_CMD=""; if command -v timeout >/dev/null 2>&1; then TIMEOUT_CMD="timeout 600"; elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_CMD="gtimeout 600"; fi; $TIMEOUT_CMD codex exec -C /absolute/path/to/project/root \
     --sandbox read-only \
     --full-auto \
     --skip-git-repo-check \
@@ -191,6 +184,7 @@ Codex review failed after retry. How would you like to proceed?
 
 | Mistake | Fix |
 |---------|-----|
+| Splitting timeout detection and codex exec into separate Bash calls | Everything must be ONE Bash invocation — variables don't persist between calls |
 | Running codex from wrong directory | Always use `-C /absolute/path/to/project/root` |
 | Running codex in background | Always run synchronously (no `&`). Background processes cause duplicate output later |
 | Codex hangs indefinitely | The `timeout`/`gtimeout` wrapper kills it after 10 minutes |
