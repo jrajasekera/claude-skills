@@ -103,33 +103,61 @@ After receiving Codex's feedback, categorize each item:
 
 **Presenting minor concerns:**
 
-Use the `ask_user_input` tool (multi_select) to let the user pick which minor concerns to address. Each option should be a short summary of the concern. This avoids requiring the user to type out responses manually.
+Handle each minor concern individually using `AskUserQuestion`. For each concern, present multiple ways to address it so the user can pick the best approach.
 
-Example usage:
+Call `AskUserQuestion` once per minor concern with options representing different ways to resolve it:
+
 ```
-ask_user_input with type="multi_select":
-  question: "Codex raised these additional concerns. Which should I address?"
+AskUserQuestion:
+  question: "Codex suggests: [concern summary]. How should I address this?"
+  header: "[short label]"
   options:
-    - "[Concern 1 summary]"
-    - "[Concern 2 summary]"
-    - "[Concern 3 summary]"
-    - "None of these"
+    - label: "[Approach A]", description: "[what this approach does]"
+    - label: "[Approach B]", description: "[what this approach does]"
+    - label: "Skip this", description: "Don't address this concern"
+  multiSelect: false
 ```
 
-If there are more than 4 minor concerns, group related ones together or split across multiple questions (the tool supports up to 3 questions with up to 4 options each). If concerns don't fit in the tool's constraints, fall back to listing them in text and asking the user to reply.
+**Guidelines:**
+- Each concern gets its own `AskUserQuestion` call — do not batch multiple concerns into one question
+- Always include a "Skip this" option so the user can dismiss concerns they don't care about
+- Present 2-3 concrete resolution approaches per concern, plus the skip option
+- If there are many minor concerns (5+), you may batch multiple `AskUserQuestion` calls in parallel (up to 4 per message) to avoid excessive back-and-forth
 
 ## Review Rounds
 
-**Default:** 1 round
+**Auto-continue on critical issues, capped at 3 rounds.**
 
-**User can specify more:** "use codex-review with 2 rounds", "do 3 review rounds"
+```dot
+digraph review_rounds {
+    "Round N" [shape=box];
+    "Process feedback" [shape=box];
+    "Had critical issues?" [shape=diamond];
+    "N < 3?" [shape=diamond];
+    "Update plan, run round N+1" [shape=box];
+    "Proceed to implementation" [shape=box];
 
-Do NOT ask after each round whether to continue. Complete all requested rounds, then proceed.
+    "Round N" -> "Process feedback";
+    "Process feedback" -> "Had critical issues?";
+    "Had critical issues?" -> "Proceed to implementation" [label="no"];
+    "Had critical issues?" -> "N < 3?" [label="yes"];
+    "N < 3?" -> "Update plan, run round N+1" [label="yes"];
+    "N < 3?" -> "Proceed to implementation" [label="no (max reached)"];
+    "Update plan, run round N+1" -> "Round N" [style=dashed];
+}
+```
+
+**Rules:**
+- After each round, if any **critical issues** were found and addressed, automatically run another round to verify the fixes
+- If a round produces only minor concerns (or no feedback), stop — no further rounds needed
+- **Maximum 3 rounds total.** If round 3 still has critical issues, proceed to implementation anyway and note the unresolved concerns
+- The user can still request a specific number of rounds (e.g., "do 2 rounds"), which overrides the auto-continue logic but is still capped at 3
 
 After each round:
-1. Update the plan/design doc with changes
-2. If more rounds remain, invoke Codex again on the updated doc
-3. After final round, proceed to implementation
+1. Address critical issues and update the plan/design doc
+2. Present minor concerns to the user (per the feedback processing rules above)
+3. If critical issues were addressed and rounds remain, invoke Codex again on the updated doc
+4. After final round, proceed to implementation
 
 ## Error Handling
 
@@ -168,7 +196,8 @@ Codex review failed after retry. How would you like to proceed?
 | Codex hangs indefinitely | The `timeout`/`gtimeout` wrapper kills it after 10 minutes |
 | `timeout` not found (exit code 127) on macOS | Use `gtimeout` from `brew install coreutils`, or omit timeout if neither is available |
 | Writing feedback to file | Capture stdout directly, don't create feedback files |
-| Asking after each round | Complete all requested rounds without prompting |
+| Running extra rounds when only minor concerns remain | Only auto-continue if critical issues were found |
+| Exceeding 3 rounds | Cap at 3 rounds max, even if critical issues persist |
 | Addressing all feedback equally | Categorize: critical = auto-fix, minor = ask user |
 | Forgetting to update plan between rounds | Always update the doc before next round |
 | Using relative path for plan outside project | Use absolute path for files not in project root |
@@ -177,14 +206,12 @@ Codex review failed after retry. How would you like to proceed?
 ## Quick Reference
 
 ```
-# Single round (default)
-[Create plan] → codex-review → address feedback → implement
-
-# Multiple rounds
-[Create plan] → codex-review round 1 → update plan →
-              → codex-review round 2 → update plan → implement
+# Review flow (auto-continues on critical issues, max 3 rounds)
+[Create plan] → codex-review round 1 → address feedback →
+  critical issues found? → yes → update plan → round 2 → ...
+  no critical issues?    → proceed to implementation
 
 # Feedback handling
-Critical issues  → Address immediately
-Minor concerns   → Ask user which to address
+Critical issues  → Address immediately, triggers another round
+Minor concerns   → AskUserQuestion per concern with resolution options
 ```
